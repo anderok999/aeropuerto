@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SGP-BoA | Gestión de Hangares</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --boa-blue: #003366; --boa-red: #ff0000; }
+        .navbar { border-bottom: 4px solid var(--boa-red); background-color: var(--boa-blue) !important; }
+        .status-apto { background-color: #d4edda; color: #155724; font-weight: bold; border-radius: 4px; padding: 2px 8px; }
+        .status-bloqueado { background-color: #f8d7da; color: #721c24; font-weight: bold; border-radius: 4px; padding: 2px 8px; }
+        .card-header { font-weight: bold; }
+        .list-group-item-danger { border-left: 5px solid #dc3545; }
+        @media print {
+    /* Escondemos lo que no queremos en el PDF */
+    .btn, #form-asignacion, .navbar, .sidebar, .card-body small {
+        display: none !important;
+    }
+    
+    /* Forzamos que las tarjetas y tablas ocupen todo el ancho */
+    .col-md-3, .col-md-8, .col-md-4 {
+        width: 100% !important;
+        margin-bottom: 20px;
+    }
+
+    body {
+        background-color: white !important;
+        padding: 20px;
+    }
+
+    .card {
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+    }
+    
+    /* Agregamos un encabezado que solo se ve en el PDF */
+    .print-header {
+        display: block !important;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+}
+
+.print-header { display: none; }
+    </style>
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-dark shadow mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <strong>BOLIVIANA DE AVIACIÓN - Sistema de Planificación</strong>
+            </a>
+            <span class="badge bg-danger">HANGAR EL ALTO</span>
+        </div>
+    </nav>
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white shadow">
+            <div class="card-body">
+                <h6 class="card-title">PERSONAL APTO</h6>
+                <h2 id="count-aptos">0</h2>
+                <small>Licencias vigentes DGAC</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white shadow">
+            <div class="card-body">
+                <h6 class="card-title">AERONAVES AOG</h6>
+                <h2 id="count-aog">0</h2>
+                <small>Prioridad alta en hangar</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark shadow">
+            <div class="card-body">
+                <h6 class="card-title">TAREAS EN CURSO</h6>
+                <h2 id="count-proceso">0</h2>
+                <small>Worklog activo</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white shadow">
+            <div class="card-body">
+                <h6 class="card-title">LOGRO DEL TURNO</h6>
+                <h2 id="count-completas">0</h2>
+                <small>Tareas liberadas hoy</small>
+            </div>
+        </div>
+    </div>
+</div>
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <span>DISPONIBILIDAD TÉCNICA</span>
+                        <small>Validación DGAC Automática</small>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Técnico</th>
+                                        <th>Especialidad</th>
+                                        <th>Vencimiento</th>
+                                        <th>Estatus</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-tecnicos">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-danger text-white">
+                        <span>FLOTA CRÍTICA (AOG)</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="lista-aeronaves" class="list-group list-group-flush">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow-sm border-primary">
+                    <div class="card-header bg-dark text-white">
+                        DESPLEGAR PERSONAL A MANTENIMIENTO
+                    </div>
+                    <div class="card-body bg-white">
+                        <form id="form-asignacion" class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">1. Seleccionar Técnico Apto</label>
+                                <select id="select-tecnicos" class="form-select" required>
+                                    <option value="">Cargando personal disponible...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">2. Aeronave / Tarea Pendiente</label>
+                                <select id="select-ots" class="form-select" required>
+                                    <option value="">Cargando órdenes de trabajo...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-bold">3. Turno</label>
+                                <select id="select-turnos" class="form-select">
+                                    <option value="1">Mañana (06:00 - 14:00)</option>
+                                    <option value="2">Tarde (14:00 - 22:00)</option>
+                                    <option value="3">Noche (22:00 - 06:00)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">
+                                    REGISTRAR ASIGNACIÓN
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-secondary text-white">
+                CONTROL DE TAREAS EN HANGAR (WORKLOG)
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Técnico</th>
+                            <th>Especialidad</th>
+                            <th>Aeronave</th>
+                            <th>Tarea</th>
+                            <th>Turno</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-asignaciones">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<p>
+</p>
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-danger" onclick="previsualizarReporte()">
+        <i class="fas fa-file-pdf"></i> Generar Reporte de Turno
+    </button>
+</div>
+
+        <footer class="text-center mt-5 text-muted small">
+            <p>&copy; 2026 UNIFRANZ - Ingeniería de Sistemas | Proyecto BoA</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
